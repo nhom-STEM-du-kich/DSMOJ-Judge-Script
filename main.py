@@ -9,8 +9,15 @@ import shutil
 # --- CẤU HÌNH ---
 API_GET_TASK = 'http://localhost:8000/api/get-task'
 API_UPDATE_RESULT = 'http://localhost:8000/api/update-result'
+API = 'http://localhost:8000/api/'
 NUM_WORKERS = 4 
-
+JUDGE_API_KEY = '2211ac5a-2f6d-4d8c-b80b-fae4482d6dc8'
+HEADERS = {
+    'X-DSMOJ-Auth': JUDGE_API_KEY,
+    'Content-Type': 'application/json'
+}
+SUPPORTED_LANGUAGES = "C++ (GCC), ASM (NASM)"
+MACHINE_LANGUAGES = ["cpp", "nasm"]
 def build_test_log(count, status, input_str, expected, actual, exec_time, test_view, sub_id=None):
     """Xây dựng log HTML chuyên nghiệp"""
     color = "green" if status == "AC" else "#ff4d4d"
@@ -60,7 +67,7 @@ def worker_main(worker_id):
 
     while True:
         try:
-            resp = requests.get(API_GET_TASK, timeout=5)
+            resp = requests.get(API_GET_TASK, timeout=5, headers=HEADERS)
             if resp.status_code != 200 or resp.json().get('status') == 'empty':
                 time.sleep(1); continue
             
@@ -127,15 +134,19 @@ def worker_main(worker_id):
                     except: pass
                 print(f"[Worker {worker_id}] Đã dọn dẹp file bài #{sub_id}")
 
-            requests.post(f"{API_UPDATE_RESULT}/{sub_id}/", json={"status": overall_status, "log": html_logs, "score": total_score})
+            requests.post(f"{API_UPDATE_RESULT}/{sub_id}/", json={"status": overall_status, "log": html_logs, "score": total_score},headers=HEADERS)
             print(f"[Worker {worker_id}] Xong #{sub_id} -> {overall_status} ({total_score} pts)")
         except Exception as e:
             print(f"Lỗi hệ thống: {e}"); time.sleep(2)
+        except ConnectionError as e:
+            print("connection error")
 
 if __name__ == "__main__":
+    requests.post(f"{API}ruok/", json={"status": "ON", "supported_languages": f"{SUPPORTED_LANGUAGES}", "languages_matrix": f"{MACHINE_LANGUAGES}"},headers=HEADERS)
     processes = [multiprocessing.Process(target=worker_main, args=(i,)) for i in range(NUM_WORKERS)]
     for p in processes: p.start()
     try:
         for p in processes: p.join()
     except KeyboardInterrupt:
+        requests.post(f"{API}ruok/", json={"status": "OF", "supported_languages": f"{SUPPORTED_LANGUAGES}"},headers=HEADERS)
         for p in processes: p.terminate()
